@@ -5,15 +5,20 @@ import (
 	"net/http"
 	"time"
 
+	"go-todo/cmd/handlers"
+	"go-todo/cmd/storage"
+
 	"github.com/golang-jwt/jwt/v5"
-	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
 
 type APIServer struct {
 	ListenAddr string
+	db         storage.Storage
 }
+
+type responseHnadler func(echo.Context, storage.Storage) error
 
 type jwtCustomClaims struct {
 	Name  string `json:"name"`
@@ -26,9 +31,10 @@ type User struct {
 	Password string `json:"password"`
 }
 
-func NewAPIServer(listenAddr string) *APIServer {
+func NewAPIServer(listenAddr string, store storage.Storage) *APIServer {
 	return &APIServer{
 		ListenAddr: listenAddr,
+		db:         store,
 	}
 }
 
@@ -40,13 +46,13 @@ func (a *APIServer) Run() {
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
-	CreateUsersGroup(e)
-	CreateTodoGroup(e)
+	CreateUsersGroup(e, a)
+	CreateTodoGroup(e, a)
 
 	e.Logger.Fatal(e.Start(":" + a.ListenAddr))
 }
 
-func CreateUsersGroup(e *echo.Echo) {
+func CreateUsersGroup(e *echo.Echo, a *APIServer) {
 	g := e.Group("/users")
 	g.POST("/log-in", func(c echo.Context) error {
 		u := new(User)
@@ -106,21 +112,57 @@ func CreateUsersGroup(e *echo.Echo) {
 	})
 }
 
-func CreateTodoGroup(e *echo.Echo) {
+func CreateTodoGroup(e *echo.Echo, a *APIServer) {
 	g := e.Group("/todos")
-	config := echojwt.Config{
-		NewClaimsFunc: func(c echo.Context) jwt.Claims {
-			return new(jwtCustomClaims)
-		},
-		SigningKey: []byte("secret"),
-	}
 
-	g.Use(echojwt.WithConfig(config))
+	//WITHOUN Authorization
 
-	g.GET("/", func(c echo.Context) error {
-		user := c.Get("user").(*jwt.Token)
-		claims := user.Claims.(*jwtCustomClaims)
-		name := claims.Name
-		return c.String(http.StatusOK, "Hello"+name)
+	g.GET("/", a.makeApiHanlder(handlers.GetTodos))
+
+	g.GET("/:todoId", func(c echo.Context) error {
+		todoId := c.Param("todoId")
+		return c.String(http.StatusOK, todoId)
 	})
+
+	g.POST("/:todoId", func(c echo.Context) error {
+		todoId := c.Param("todoId")
+		return c.String(http.StatusOK, todoId)
+	})
+
+	g.PUT("/:todoId", func(c echo.Context) error {
+		todoId := c.Param("todoId")
+		return c.String(http.StatusOK, todoId)
+	})
+
+	g.DELETE("/:todoId", func(c echo.Context) error {
+		todoId := c.Param("todoId")
+		return c.String(http.StatusOK, todoId)
+	})
+	// TODO:descoment this next section when todo api completed
+	/*
+		config := echojwt.Config{
+			NewClaimsFunc: func(c echo.Context) jwt.Claims {
+				return new(jwtCustomClaims)
+			},
+			SigningKey: []byte("secret"),
+		}
+
+		g.Use(echojwt.WithConfig(config))
+
+		g.GET("/", func(c echo.Context) error {
+			user := c.Get("user").(*jwt.Token)
+			claims := user.Claims.(*jwtCustomClaims)
+			name := claims.Name
+			return c.String(http.StatusOK, "Hello"+name)
+		})
+	*/
+}
+func (a *APIServer) makeApiHanlder(handler responseHnadler) func(echo.Context) error {
+	return func(e echo.Context) error {
+		err := handler(e, a.db)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 }
