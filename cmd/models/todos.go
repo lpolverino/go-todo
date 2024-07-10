@@ -1,9 +1,9 @@
 package models
 
 type Todo struct {
-	Id      string
-	Status  bool
-	Author  string
-	Title   string
-	Content string
+	Id      string `json:"id"`
+	Status  bool   `json:"status"`
+	Author  string `json:"author"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
 }

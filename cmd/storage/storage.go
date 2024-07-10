@@ -5,9 +5,9 @@ import (
 )
 
 type Storage interface {
-	CreateTodo(*models.Todo) error
-	DeleteTodo(int) error
+	CreateTodo(*models.Todo) (int, error)
+	DeleteTodo(string) error
 	UpdateTodo(*models.Todo) error
 	GetTodos() ([]*models.Todo, error)
-	GetTodoByID(ID int) (*models.Todo, error)
+	GetTodoByID(ID string) (*models.Todo, error)
 }

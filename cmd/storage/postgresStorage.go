@@ -6,6 +6,7 @@ import (
 	"go-todo/cmd/models"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -66,18 +67,103 @@ func (s *PostgresStorage) CreateUsersTable() error {
 	return nil
 }
 
-func (s *PostgresStorage) CreateTodo(*models.Todo) error {
+func (s *PostgresStorage) CreateTodo(newTodo *models.Todo) (int, error) {
+	var returningId int
+	query := `insert into 
+	todos (title, author, content, status)
+	values ($1, $2, $3, $4)
+	RETURNING id`
+
+	rsp, err := s.db.Query(query,
+		newTodo.Title, newTodo.Author, newTodo.Content, newTodo.Status,
+	)
+
+	if err != nil {
+		return 0, err
+	}
+
+	rsp.Next()
+	rsp.Scan(&returningId)
+
+	return returningId, nil
+}
+
+func (s *PostgresStorage) DeleteTodo(id string) error {
+	query := `Delete from todos where id = $1`
+	_, err := s.db.Query(query, id)
+	if err != nil {
+		return err
+	}
 	return nil
 }
-func (s *PostgresStorage) DeleteTodo(int) error {
-	return nil
+
+func (s *PostgresStorage) UpdateTodo(newTodo *models.Todo) error {
+
+	query := "UPDATE todos SET "
+	var updates []string
+	var args []interface{}
+
+	argID := 1
+
+	if newTodo.Title != "" {
+		updates = append(updates, fmt.Sprintf("title = $%d", argID))
+		args = append(args, newTodo.Title)
+		argID++
+	}
+	if newTodo.Author != "" {
+		updates = append(updates, fmt.Sprintf("author = $%d", argID))
+		args = append(args, newTodo.Author)
+		argID++
+	}
+	if newTodo.Content != "" {
+		updates = append(updates, fmt.Sprintf("content = $%d", argID))
+		args = append(args, newTodo.Content)
+		argID++
+	}
+
+	updates = append(updates, fmt.Sprintf("status = $%d", argID))
+	args = append(args, newTodo.Status)
+	argID++
+
+	query += strings.Join(updates, ", ")
+	query += fmt.Sprintf(" WHERE id = $%d RETURNING id", argID)
+	args = append(args, newTodo.Id)
+
+	_, err := s.db.Query(query, args...)
+	return err
 }
-func (s *PostgresStorage) UpdateTodo(*models.Todo) error {
-	return nil
-}
+
 func (s *PostgresStorage) GetTodos() ([]*models.Todo, error) {
-	return nil, nil
+	query := `select * from todos`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	todos := []*models.Todo{}
+
+	for rows.Next() {
+		todo := new(models.Todo)
+		err := rows.Scan(&todo.Id, &todo.Title, &todo.Author, &todo.Content, &todo.Status)
+		if err != nil {
+			return nil, err
+		}
+		todos = append(todos, todo)
+	}
+	return todos, nil
 }
-func (s *PostgresStorage) GetTodoByID(ID int) (*models.Todo, error) {
-	return nil, nil
+func (s *PostgresStorage) GetTodoByID(ID string) (*models.Todo, error) {
+	//TODO: input santizing is requierid
+	query := `select * from todos where id = $1`
+	rsp, err := s.db.Query(query, ID)
+	if err != nil {
+		return nil, err
+	}
+	if !rsp.Next() {
+		return nil, nil
+	}
+	todo := new(models.Todo)
+	err = rsp.Scan(&todo.Id, &todo.Title, &todo.Author, &todo.Content, &todo.Status)
+	log.Printf("The todo is %+v", todo)
+	return todo, err
 }

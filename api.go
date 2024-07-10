@@ -119,25 +119,13 @@ func CreateTodoGroup(e *echo.Echo, a *APIServer) {
 
 	g.GET("/", a.makeApiHanlder(handlers.GetTodos))
 
-	g.GET("/:todoId", func(c echo.Context) error {
-		todoId := c.Param("todoId")
-		return c.String(http.StatusOK, todoId)
-	})
+	g.POST("/", a.makeApiHanlder(handlers.AddTodo))
 
-	g.POST("/:todoId", func(c echo.Context) error {
-		todoId := c.Param("todoId")
-		return c.String(http.StatusOK, todoId)
-	})
+	g.GET("/:todoId", a.makeApiHanlder(handlers.GetTodo))
 
-	g.PUT("/:todoId", func(c echo.Context) error {
-		todoId := c.Param("todoId")
-		return c.String(http.StatusOK, todoId)
-	})
+	g.PUT("/:todoId", a.makeApiHanlder(handlers.UpdateTodo))
 
-	g.DELETE("/:todoId", func(c echo.Context) error {
-		todoId := c.Param("todoId")
-		return c.String(http.StatusOK, todoId)
-	})
+	g.DELETE("/:todoId", a.makeApiHanlder(handlers.DeleteTodo))
 	// TODO:descoment this next section when todo api completed
 	/*
 		config := echojwt.Config{
