@@ -54,7 +54,7 @@ func (s *PostgresStorage) CreateTodosTable() error {
 	query := `create table if not exists todos (
 	id serial primary key,
 		title varchar(80),
-		author varchar(50),
+		authorId serial references users(id),
 		content varchar(1000),
 		status boolean
 	)`
@@ -64,7 +64,14 @@ func (s *PostgresStorage) CreateTodosTable() error {
 }
 
 func (s *PostgresStorage) CreateUsersTable() error {
-	return nil
+	query := `create table if not exists users(
+		id serial primary key,
+		username varchar(80),
+		password varchar(500)
+	)`
+
+	_, err := s.db.Exec(query)
+	return err
 }
 
 func (s *PostgresStorage) CreateTodo(newTodo *models.Todo) (int, error) {
@@ -166,4 +173,31 @@ func (s *PostgresStorage) GetTodoByID(ID string) (*models.Todo, error) {
 	err = rsp.Scan(&todo.Id, &todo.Title, &todo.Author, &todo.Content, &todo.Status)
 	log.Printf("The todo is %+v", todo)
 	return todo, err
+}
+
+func (s *PostgresStorage) IsValidUser(username, password string) (bool, error) {
+	query := `select * from users where username = $1`
+	rsp, err := s.db.Query(query, username)
+	if err != nil {
+		return false, err
+	}
+	rsp.Next()
+	user := new(models.User)
+	err = rsp.Scan(&user.Id, &user.Username, &user.Password)
+
+	if err != nil {
+		return false, err
+	}
+
+	return password == user.Password, nil
+
+}
+
+func (s *PostgresStorage) CreateUser(username, password string) error {
+	query := `Insert into users values ()`
+	_, err := s.db.Query(query, username, password)
+	if err != nil {
+		return err
+	}
+	return nil
 }

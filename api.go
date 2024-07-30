@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 	"go-todo/cmd/storage"
 
 	"github.com/golang-jwt/jwt/v5"
+	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -60,14 +60,12 @@ func CreateUsersGroup(e *echo.Echo, a *APIServer) {
 			return echo.ErrBadRequest
 		}
 
-		fmt.Printf("the user %s : %s", u.Name, u.Password)
-
-		if u.Name != "jon" || u.Password != "shhh" {
+		if !a.isAuthorized(u) {
 			return echo.ErrUnauthorized
 		}
 
 		claims := &jwtCustomClaims{
-			"Jon Snow",
+			u.Name,
 			true,
 			jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
@@ -90,6 +88,9 @@ func CreateUsersGroup(e *echo.Echo, a *APIServer) {
 		u := new(User)
 		if err := c.Bind(u); err != nil {
 			return echo.ErrBadRequest
+		}
+		if a.createUser(u) != nil {
+			return echo.ErrInternalServerError
 		}
 		claims := &jwtCustomClaims{
 			u.Name,
@@ -115,8 +116,14 @@ func CreateUsersGroup(e *echo.Echo, a *APIServer) {
 func CreateTodoGroup(e *echo.Echo, a *APIServer) {
 	g := e.Group("/todos")
 
-	//WITHOUN Authorization
+	config := echojwt.Config{
+		NewClaimsFunc: func(c echo.Context) jwt.Claims {
+			return new(jwtCustomClaims)
+		},
+		SigningKey: []byte("secret"),
+	}
 
+	g.Use(echojwt.WithConfig(config))
 	g.GET("/", a.makeApiHanlder(handlers.GetTodos))
 
 	g.POST("/", a.makeApiHanlder(handlers.AddTodo))
@@ -126,25 +133,8 @@ func CreateTodoGroup(e *echo.Echo, a *APIServer) {
 	g.PUT("/:todoId", a.makeApiHanlder(handlers.UpdateTodo))
 
 	g.DELETE("/:todoId", a.makeApiHanlder(handlers.DeleteTodo))
-	// TODO:descoment this next section when todo api completed
-	/*
-		config := echojwt.Config{
-			NewClaimsFunc: func(c echo.Context) jwt.Claims {
-				return new(jwtCustomClaims)
-			},
-			SigningKey: []byte("secret"),
-		}
-
-		g.Use(echojwt.WithConfig(config))
-
-		g.GET("/", func(c echo.Context) error {
-			user := c.Get("user").(*jwt.Token)
-			claims := user.Claims.(*jwtCustomClaims)
-			name := claims.Name
-			return c.String(http.StatusOK, "Hello"+name)
-		})
-	*/
 }
+
 func (a *APIServer) makeApiHanlder(handler responseHnadler) func(echo.Context) error {
 	return func(e echo.Context) error {
 		err := handler(e, a.db)
@@ -153,4 +143,14 @@ func (a *APIServer) makeApiHanlder(handler responseHnadler) func(echo.Context) e
 		}
 		return nil
 	}
+}
+
+func (a *APIServer) isAuthorized(user *User) bool {
+	ok, _ := a.db.IsValidUser(user.Name, user.Password)
+	return ok
+}
+
+func (a *APIServer) createUser(user *User) error {
+	err := a.db.CreateUser(user.Name, user.Password)
+	return err
 }
